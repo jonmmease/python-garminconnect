@@ -1435,6 +1435,38 @@ class Garmin:
 
         return self.connectapi(url)
 
+    def search_nutrition_foods(
+        self, search: str, start: int = 0, limit: int = 50
+    ) -> dict[str, Any]:
+        """Search for foods in the FatSecret nutrition database.
+
+        Note: This searches the FatSecret database only, not custom foods.
+        Use get_nutrition_custom_foods(search=...) to search My Foods.
+
+        Args:
+            search: Search expression (e.g., "sardines", "chicken breast")
+            start: Pagination start index
+            limit: Maximum number of results (default 50)
+
+        Returns:
+            dict with:
+            - results[]: Array of foods with foodMetaData, nutritionContents,
+              isRecent, isFavorite, and type
+            - moreDataAvailable: Boolean indicating if more results exist
+
+        """
+        url = "/nutrition-service/food/search"
+        params: dict[str, Any] = {
+            "searchExpression": search,
+            "start": start,
+            "limit": limit,
+            "regionCode": "US",
+            "languageCode": "en",
+        }
+        logger.debug("Searching foods: %s", search)
+
+        return self.garth.get("connectapi", url, params=params).json()
+
     def get_nutrition_custom_foods(
         self, search: str = "", start: int = 0, limit: int = 20
     ) -> dict[str, Any]:
