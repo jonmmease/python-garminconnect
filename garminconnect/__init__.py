@@ -300,6 +300,7 @@ class Garmin:
             "/nutrition-service/user/nutritionCurrentStatus"
         )
         self.garmin_connect_nutrition_recent_url = "/nutrition-service/food/recent"
+        self.garmin_connect_nutrition_custom_foods_url = "/nutrition-service/customFood"
 
         self.garth = garth.Client(
             domain="garmin.cn" if is_cn else "garmin.com",
@@ -1415,6 +1416,33 @@ class Garmin:
         logger.debug("Requesting nutrition status")
 
         return self.connectapi(url)
+
+    def get_nutrition_custom_foods(
+        self, search: str = "", start: int = 0, limit: int = 20
+    ) -> dict[str, Any]:
+        """Return user's custom foods (My Foods).
+
+        Args:
+            search: Optional search expression to filter foods
+            start: Pagination start index
+            limit: Maximum number of results (max 20)
+
+        Returns:
+            dict with customFoods[] containing foodMetaData and nutritionContents
+            with food_id, serving_id, and source needed for add_nutrition_food_log()
+
+        """
+        url = self.garmin_connect_nutrition_custom_foods_url
+        params: dict[str, Any] = {
+            "start": start,
+            "limit": min(limit, 20),  # API max is 20
+            "includeContent": True,
+        }
+        if search:
+            params["searchExpression"] = search
+        logger.debug("Requesting custom foods")
+
+        return self.garth.get("connectapi", url, params=params).json()
 
     def get_nutrition_recent_foods(
         self, cdate: str, meal_id: int, start: int = 0, limit: int = 50
