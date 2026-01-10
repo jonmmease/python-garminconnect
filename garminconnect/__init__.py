@@ -1871,6 +1871,97 @@ class Garmin:
 
         return self.garth.get("connectapi", url, params=params).json()
 
+    def create_nutrition_custom_meal(
+        self,
+        meal_name: str,
+        foods: list[tuple[dict[str, Any], str, float]],
+    ) -> dict[str, Any]:
+        """Create a new custom meal (My Meals).
+
+        A custom meal is a saved combination of foods that can be logged together.
+
+        Args:
+            meal_name: Name for the custom meal
+            foods: List of (food, serving_id, serving_qty) tuples where:
+                - food: Food dict from search_nutrition_foods() or
+                  get_nutrition_custom_foods() results
+                - serving_id: ID of the serving size to use (from
+                  food['nutritionContents'][n]['servingId'])
+                - serving_qty: Quantity of servings
+
+        Returns:
+            dict with created meal including customMealId
+
+        Example:
+            # Search for foods
+            results = garmin.search_nutrition_foods('sardines')
+            sardines = results['results'][0]
+            serving_id = sardines['nutritionContents'][0]['servingId']
+
+            # Create meal with 2 servings of sardines
+            meal = garmin.create_nutrition_custom_meal(
+                'My Sardine Lunch',
+                [(sardines, serving_id, 2.0)]
+            )
+
+        """
+        url = self.garmin_connect_nutrition_custom_meals_url
+
+        meal_foods = []
+        for food, serving_id, serving_qty in foods:
+            # Find the nutrition content for the specified serving_id
+            nutrition_content = None
+            for nc in food.get("nutritionContents", []):
+                if nc.get("servingId") == serving_id:
+                    nutrition_content = nc
+                    break
+
+            if nutrition_content is None:
+                raise ValueError(
+                    f"serving_id '{serving_id}' not found in food "
+                    f"'{food.get('foodMetaData', {}).get('foodName', 'unknown')}'"
+                )
+
+            meal_food = {
+                "foodMetaData": food["foodMetaData"],
+                "nutritionContent": nutrition_content,
+                "servingQty": serving_qty,
+            }
+
+            # Include images if present
+            if food.get("foodImages"):
+                meal_food["foodImages"] = food["foodImages"]
+
+            meal_foods.append(meal_food)
+
+        payload = {
+            "customMeals": [
+                {
+                    "customMealId": None,
+                    "name": meal_name,
+                    "isFavorite": False,
+                    "status": 0,
+                    "foods": meal_foods,
+                    "type": "MEAL",
+                    "imageUuid": None,
+                }
+            ]
+        }
+
+        logger.debug("Creating custom meal: %s", meal_name)
+        return self.garth.put("connectapi", url, json=payload).json()
+
+    def delete_nutrition_custom_meal(self, meal_id: int) -> None:
+        """Delete a custom meal (My Meals).
+
+        Args:
+            meal_id: ID of the meal to delete (from customMealId)
+
+        """
+        url = f"{self.garmin_connect_nutrition_custom_meals_url}/{meal_id}"
+        logger.debug("Deleting custom meal: %s", meal_id)
+        self.garth.delete("connectapi", url)
+
     def get_nutrition_recent_foods(
         self, cdate: str, meal_id: int, start: int = 0, limit: int = 50
     ) -> dict[str, Any]:
