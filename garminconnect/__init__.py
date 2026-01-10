@@ -1430,6 +1430,65 @@ class Garmin:
 
         self.garth.request("DELETE", "connectapi", url, json=payload)
 
+    def add_nutrition_food_log(
+        self,
+        cdate: str,
+        meal_id: int,
+        food_id: str,
+        serving_id: str,
+        serving_qty: float,
+        source: str = "FATSECRET",
+        meal_time: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a food log entry.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+            meal_id: Meal ID (from get_nutrition_meals, e.g., 205461 for breakfast)
+            food_id: Food ID (from existing food logs or Garmin food database)
+            serving_id: Serving size ID (from existing food logs)
+            serving_qty: Number of servings
+            source: Food source, typically "FATSECRET" or "GARMIN"
+            meal_time: Time in 'HH:MM:SS' format (defaults to current time)
+
+        Returns:
+            Updated food logs for the day
+
+        """
+        from datetime import datetime, timezone
+
+        cdate = _validate_date_format(cdate, "cdate")
+        if meal_time is None:
+            meal_time = datetime.now().strftime("%H:%M:%S")
+
+        url = self.garmin_connect_nutrition_food_logs_url
+        payload = {
+            "mealDate": cdate,
+            "foodLogItems": [
+                {
+                    "logId": None,
+                    "logTimestamp": datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%S.000Z"
+                    ),
+                    "logSource": "GCW",
+                    "logCategory": "REGULAR_LOG",
+                    "mealTime": meal_time,
+                    "action": "ADD",
+                    "mealId": meal_id,
+                    "foodId": food_id,
+                    "servingId": serving_id,
+                    "source": source,
+                    "regionCode": "US",
+                    "languageCode": "en",
+                    "servingQty": serving_qty,
+                    "customMealId": None,
+                }
+            ],
+        }
+        logger.debug("Adding food %s to meal %d for %s", food_id, meal_id, cdate)
+
+        return self.garth.put("connectapi", url, json=payload).json()
+
     def get_all_day_events(self, cdate: str) -> dict[str, Any]:
         """Return available daily events data 'cdate' format 'YYYY-MM-DD'.
         Includes autodetected activities, even if not recorded on the watch.
