@@ -1415,6 +1415,21 @@ class Garmin:
 
         return self.connectapi(url)
 
+    def delete_nutrition_food_logs(self, cdate: str, log_ids: list[str]) -> None:
+        """Delete food log entries for a given date.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+            log_ids: List of log IDs to delete (from get_nutrition_food_logs)
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_nutrition_food_logs_url}/{cdate}"
+        payload = {"logIds": log_ids}
+        logger.debug("Deleting %d food log entries for %s", len(log_ids), cdate)
+
+        self.garth.request("DELETE", "connectapi", url, json=payload)
+
     def get_all_day_events(self, cdate: str) -> dict[str, Any]:
         """Return available daily events data 'cdate' format 'YYYY-MM-DD'.
         Includes autodetected activities, even if not recorded on the watch.
