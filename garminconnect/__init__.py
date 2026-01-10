@@ -294,6 +294,11 @@ class Garmin:
             "/nutrition-service/calorie/summary/daily"
         )
         self.garmin_connect_nutrition_food_logs_url = "/nutrition-service/food/logs"
+        self.garmin_connect_nutrition_settings_url = "/nutrition-service/settings"
+        self.garmin_connect_nutrition_meals_url = "/nutrition-service/meals"
+        self.garmin_connect_nutrition_status_url = (
+            "/nutrition-service/user/nutritionCurrentStatus"
+        )
 
         self.garth = garth.Client(
             domain="garmin.cn" if is_cn else "garmin.com",
@@ -1350,6 +1355,63 @@ class Garmin:
         cdate = _validate_date_format(cdate, "cdate")
         url = f"{self.garmin_connect_nutrition_food_logs_url}/{cdate}"
         logger.debug("Requesting nutrition food logs for %s", cdate)
+
+        return self.connectapi(url)
+
+    def get_nutrition_settings(self, cdate: str) -> dict[str, Any]:
+        """Return nutrition settings and goals for a date.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+
+        Returns:
+            dict containing:
+            - weightChangeType: LOSS, GAIN, or MAINTAIN
+            - targetDate, targetWeightGoal, startingWeight
+            - activityLevel: SEDENTARY, LIGHTLY_ACTIVE, ACTIVE, VERY_ACTIVE
+            - calorieGoal: Daily calorie target
+            - macroGoals: {carbs, fat, protein} in grams
+            - autoCalorieAdjustment: Whether to adjust based on activity
+            - nutritionStatus: ACTIVE or INACTIVE
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_nutrition_settings_url}/{cdate}"
+        logger.debug("Requesting nutrition settings for %s", cdate)
+
+        return self.connectapi(url)
+
+    def get_nutrition_meals(self, cdate: str) -> dict[str, Any]:
+        """Return meal definitions with time windows and per-meal goals.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+
+        Returns:
+            dict containing meals[] with:
+            - mealId, mealName (BREAKFAST, LUNCH, DINNER, SNACKS)
+            - displayOrder, startTime, endTime
+            - goals: {calories, carbs, fat, protein} per meal
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_nutrition_meals_url}/{cdate}"
+        logger.debug("Requesting nutrition meals for %s", cdate)
+
+        return self.connectapi(url)
+
+    def get_nutrition_status(self) -> dict[str, Any]:
+        """Return whether nutrition tracking is enabled for the user.
+
+        Returns:
+            dict containing:
+            - currentStatus: NUTRITION_ENABLED or NUTRITION_DISABLED
+            - hasUsedNutrition: Whether user has logged food before
+            - hasUsedMFP: Whether linked to MyFitnessPal
+
+        """
+        url = self.garmin_connect_nutrition_status_url
+        logger.debug("Requesting nutrition status")
 
         return self.connectapi(url)
 
