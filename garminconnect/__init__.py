@@ -1,5 +1,6 @@
 """Python 3 API wrapper for Garmin Connect."""
 
+import base64
 import logging
 import numbers
 import os
@@ -1461,6 +1462,40 @@ class Garmin:
 
         return self.garth.get("connectapi", url, params=params).json()
 
+    def _upload_nutrition_food_image(
+        self, food_id: str, image_base64: str
+    ) -> dict[str, Any]:
+        """Upload an image for a custom food.
+
+        Args:
+            food_id: The food ID to attach the image to
+            image_base64: Base64-encoded image data (PNG or JPEG)
+
+        Returns:
+            dict with mediaUuid and uploadedMedia details
+
+        """
+        url = f"/nutrition-service/food/upload-image/NUTRITION_CUSTOM_FOOD/{food_id}"
+
+        # Decode base64 to bytes
+        image_data = base64.b64decode(image_base64)
+
+        # Determine content type from image header
+        if image_data[:8] == b"\x89PNG\r\n\x1a\n":
+            content_type = "image/png"
+            filename = "image.png"
+        elif image_data[:2] == b"\xff\xd8":
+            content_type = "image/jpeg"
+            filename = "image.jpg"
+        else:
+            content_type = "application/octet-stream"
+            filename = "image"
+
+        files = {"file": (filename, image_data, content_type)}
+
+        logger.debug("Uploading image for food %s", food_id)
+        return self.garth.post("connectapi", url, files=files).json()
+
     def create_nutrition_custom_food(
         self,
         food_name: str,
@@ -1486,6 +1521,7 @@ class Garmin:
         vitamin_d: float | None = None,
         calcium: float | None = None,
         iron: float | None = None,
+        image_base64: str | None = None,
     ) -> dict[str, Any]:
         """Create a new custom food (My Foods).
 
@@ -1515,6 +1551,7 @@ class Garmin:
             vitamin_d: Vitamin D (% daily value)
             calcium: Calcium (% daily value)
             iron: Iron (% daily value)
+            image_base64: Optional base64-encoded image (PNG or JPEG)
 
         Returns:
             dict with created food including foodMetaData.foodId and
@@ -1600,7 +1637,165 @@ class Garmin:
         }
 
         logger.debug("Creating custom food: %s", food_name)
-        return self.garth.put("connectapi", url, json=payload).json()
+        result = self.garth.put("connectapi", url, json=payload).json()
+
+        # Upload image if provided
+        if image_base64:
+            food_id = result["foodMetaData"]["foodId"]
+            self._upload_nutrition_food_image(food_id, image_base64)
+
+        return result
+
+    def update_nutrition_custom_food(
+        self,
+        food_id: str,
+        serving_id: str,
+        food_name: str,
+        serving_unit: str,
+        serving_size: float,
+        calories: float,
+        carbs: float = 0,
+        protein: float = 0,
+        fat: float = 0,
+        fiber: float = 0,
+        sugar: float = 0,
+        brand_name: str | None = None,
+        added_sugars: float | None = None,
+        saturated_fat: float | None = None,
+        monounsaturated_fat: float | None = None,
+        polyunsaturated_fat: float | None = None,
+        trans_fat: float | None = None,
+        cholesterol: float | None = None,
+        sodium: float | None = None,
+        potassium: float | None = None,
+        vitamin_a: float | None = None,
+        vitamin_c: float | None = None,
+        vitamin_d: float | None = None,
+        calcium: float | None = None,
+        iron: float | None = None,
+        image_base64: str | None = None,
+    ) -> dict[str, Any]:
+        """Update an existing custom food (My Foods).
+
+        Args:
+            food_id: ID of the food to update (from foodMetaData.foodId)
+            serving_id: ID of the serving (from nutritionContents[0].servingId)
+            food_name: Name of the food
+            serving_unit: Unit for serving size. Valid values:
+                "oz", "g", "ml", "fl oz", "cup", "kg", "lb", "l", "tbsp",
+                "scoop", "slice", "piece", "serving"
+            serving_size: Number of units per serving
+            calories: Calories per serving
+            carbs: Carbohydrates in grams
+            protein: Protein in grams
+            fat: Total fat in grams
+            fiber: Fiber in grams
+            sugar: Sugar in grams
+            brand_name: Optional brand name
+            added_sugars: Added sugars in grams
+            saturated_fat: Saturated fat in grams
+            monounsaturated_fat: Monounsaturated fat in grams
+            polyunsaturated_fat: Polyunsaturated fat in grams
+            trans_fat: Trans fat in grams
+            cholesterol: Cholesterol in mg
+            sodium: Sodium in mg
+            potassium: Potassium in mg
+            vitamin_a: Vitamin A (% daily value)
+            vitamin_c: Vitamin C (% daily value)
+            vitamin_d: Vitamin D (% daily value)
+            calcium: Calcium (% daily value)
+            iron: Iron (% daily value)
+            image_base64: Optional base64-encoded image (PNG or JPEG)
+
+        Returns:
+            dict with updated food data
+
+        Raises:
+            ValueError: If food_name is empty, serving_unit is invalid,
+                serving_size is not positive, or calories is negative
+
+        """
+        # Validate required fields
+        if not food_name or not food_name.strip():
+            raise ValueError("food_name is required and cannot be empty")
+
+        if serving_size <= 0:
+            raise ValueError(f"serving_size must be positive, got: {serving_size}")
+
+        if calories < 0:
+            raise ValueError(f"calories cannot be negative, got: {calories}")
+
+        # Validate serving unit
+        unit_lower = serving_unit.lower()
+        if unit_lower not in VALID_SERVING_UNITS:
+            raise ValueError(
+                f"Invalid serving_unit '{serving_unit}'. "
+                f"Valid units: {', '.join(sorted(VALID_SERVING_UNITS))}"
+            )
+
+        # Convert to API format (uppercase, underscore for spaces)
+        api_unit = unit_lower.upper().replace(" ", "_")
+
+        url = self.garmin_connect_nutrition_custom_foods_url
+
+        # Build nutrition content
+        nutrition: dict[str, Any] = {
+            "servingId": serving_id,
+            "servingUnit": api_unit,
+            "numberOfUnits": str(serving_size),
+            "calories": str(calories),
+            "carbs": str(carbs),
+            "protein": str(protein),
+            "fat": str(fat),
+            "fiber": str(fiber),
+            "sugar": str(sugar),
+        }
+
+        # Add optional nutrition fields if provided
+        optional_fields = {
+            "addedSugars": added_sugars,
+            "saturatedFat": saturated_fat,
+            "monounsaturatedFat": monounsaturated_fat,
+            "polyunsaturatedFat": polyunsaturated_fat,
+            "transFat": trans_fat,
+            "cholesterol": cholesterol,
+            "sodium": sodium,
+            "potassium": potassium,
+            "vitaminA": vitamin_a,
+            "vitaminC": vitamin_c,
+            "vitaminD": vitamin_d,
+            "calcium": calcium,
+            "iron": iron,
+        }
+        for key, value in optional_fields.items():
+            if value is not None:
+                nutrition[key] = str(value)
+
+        food_meta: dict[str, Any] = {
+            "foodId": food_id,
+            "foodName": food_name,
+            "foodType": "BRAND",
+            "source": "GARMIN",
+            "regionCode": "US",
+            "languageCode": "en",
+            "imageUuid": None,
+        }
+        if brand_name:
+            food_meta["brandName"] = brand_name
+
+        payload = {
+            "foodMetaData": food_meta,
+            "nutritionContents": [nutrition],
+        }
+
+        logger.debug("Updating custom food: %s", food_name)
+        result = self.garth.put("connectapi", url, json=payload).json()
+
+        # Upload image if provided
+        if image_base64:
+            self._upload_nutrition_food_image(food_id, image_base64)
+
+        return result
 
     def get_nutrition_custom_meals(
         self, search: str = "", start: int = 0, limit: int = 20
