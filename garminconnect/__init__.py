@@ -293,6 +293,7 @@ class Garmin:
         self.garmin_connect_nutrition_summary_url = (
             "/nutrition-service/calorie/summary/daily"
         )
+        self.garmin_connect_nutrition_food_logs_url = "/nutrition-service/food/logs"
 
         self.garth = garth.Client(
             domain="garmin.cn" if is_cn else "garmin.com",
@@ -1329,6 +1330,28 @@ class Garmin:
         logger.debug("Requesting nutrition summary from %s to %s", start_date, end_date)
 
         return self.connectapi(url, params=params)
+
+    def get_nutrition_food_logs(self, cdate: str) -> dict[str, Any]:
+        """Return detailed food logs with per-meal breakdown for a date.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+
+        Returns:
+            dict containing:
+            - mealDate: The date
+            - dailyNutritionGoals/dailyNutritionContent: Daily totals and goals
+            - mealDetails[]: Per-meal breakdown (BREAKFAST, LUNCH, DINNER, SNACKS)
+              each with meal info, mealNutritionContent, mealNutritionGoals,
+              and loggedFoods[] with individual food items and full nutritional
+              data (calories, macros, fiber, sugar, vitamins, minerals, etc.)
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_nutrition_food_logs_url}/{cdate}"
+        logger.debug("Requesting nutrition food logs for %s", cdate)
+
+        return self.connectapi(url)
 
     def get_all_day_events(self, cdate: str) -> dict[str, Any]:
         """Return available daily events data 'cdate' format 'YYYY-MM-DD'.
