@@ -1797,6 +1797,17 @@ class Garmin:
 
         return result
 
+    def delete_nutrition_custom_food(self, food_id: str) -> None:
+        """Delete a custom food (My Foods).
+
+        Args:
+            food_id: ID of the food to delete (from foodMetaData.foodId)
+
+        """
+        url = f"{self.garmin_connect_nutrition_custom_foods_url}/{food_id}"
+        logger.debug("Deleting custom food: %s", food_id)
+        self.garth.delete("connectapi", url)
+
     def get_nutrition_custom_meals(
         self, search: str = "", start: int = 0, limit: int = 20
     ) -> dict[str, Any]:
