@@ -299,6 +299,7 @@ class Garmin:
         self.garmin_connect_nutrition_status_url = (
             "/nutrition-service/user/nutritionCurrentStatus"
         )
+        self.garmin_connect_nutrition_recent_url = "/nutrition-service/food/recent"
 
         self.garth = garth.Client(
             domain="garmin.cn" if is_cn else "garmin.com",
@@ -1414,6 +1415,34 @@ class Garmin:
         logger.debug("Requesting nutrition status")
 
         return self.connectapi(url)
+
+    def get_nutrition_recent_foods(
+        self, cdate: str, meal_id: int, start: int = 0, limit: int = 50
+    ) -> dict[str, Any]:
+        """Return recently logged foods for a meal.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+            meal_id: Meal ID (from get_nutrition_meals)
+            start: Pagination start index
+            limit: Maximum number of results
+
+        Returns:
+            dict with recentFoods[] containing foodMetaData and nutritionContents
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_nutrition_recent_url}/{cdate}"
+        params = {
+            "mealId": meal_id,
+            "start": start,
+            "limit": limit,
+            "includeContent": "true",
+            "allowOverlap": "false",
+        }
+        logger.debug("Requesting recent foods for meal %d on %s", meal_id, cdate)
+
+        return self.connectapi(url, params=params)
 
     def delete_nutrition_food_logs(self, cdate: str, log_ids: list[str]) -> None:
         """Delete food log entries for a given date.
