@@ -186,6 +186,7 @@ class Garmin:
         self.garmin_connect_daily_sleep_url = (
             "/wellness-service/wellness/dailySleepData"
         )
+        self.garmin_connect_sleep_note_url = "/sleep-service/sleep/dailySleep"
         self.garmin_connect_daily_stress_url = "/wellness-service/wellness/dailyStress"
         self.garmin_connect_hill_score_url = "/metrics-service/metrics/hillscore"
 
@@ -1419,6 +1420,24 @@ class Garmin:
         logger.debug("Requesting sleep data")
 
         return self.connectapi(url, params=params)
+
+    def set_sleep_note(self, cdate: str, note: str) -> dict[str, Any]:
+        """Set sleep note for a given date.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+            note: Note text to set for the sleep entry
+
+        Returns:
+            Response from the API
+
+        """
+        cdate = _validate_date_format(cdate, "cdate")
+        url = f"{self.garmin_connect_sleep_note_url}/{cdate}/note"
+        payload = {"userNote": note}
+        logger.debug("Setting sleep note for %s", cdate)
+
+        return self.garth.put("connectapi", url, json=payload).json()
 
     def get_stress_data(self, cdate: str) -> dict[str, Any]:
         """Return stress data for current user."""
