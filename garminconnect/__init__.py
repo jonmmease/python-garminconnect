@@ -301,6 +301,7 @@ class Garmin:
         )
         self.garmin_connect_nutrition_recent_url = "/nutrition-service/food/recent"
         self.garmin_connect_nutrition_custom_foods_url = "/nutrition-service/customFood"
+        self.garmin_connect_nutrition_custom_meals_url = "/nutrition-service/customMeal"
 
         self.garth = garth.Client(
             domain="garmin.cn" if is_cn else "garmin.com",
@@ -1444,6 +1445,37 @@ class Garmin:
 
         return self.garth.get("connectapi", url, params=params).json()
 
+    def get_nutrition_custom_meals(
+        self, search: str = "", start: int = 0, limit: int = 20
+    ) -> dict[str, Any]:
+        """Return user's custom meals (My Meals).
+
+        Custom meals are saved combinations of foods that can be logged together.
+
+        Args:
+            search: Optional search expression to filter meals
+            start: Pagination start index
+            limit: Maximum number of results (max 20)
+
+        Returns:
+            dict with customMeals[] containing:
+            - customMealId: ID used for logging this meal
+            - name: Meal name
+            - foods[]: Array of foods in the meal with foodMetaData and servingQty
+
+        """
+        url = self.garmin_connect_nutrition_custom_meals_url
+        params: dict[str, Any] = {
+            "start": start,
+            "limit": min(limit, 20),
+            "includeContent": True,
+        }
+        if search:
+            params["searchExpression"] = search
+        logger.debug("Requesting custom meals")
+
+        return self.garth.get("connectapi", url, params=params).json()
+
     def get_nutrition_recent_foods(
         self, cdate: str, meal_id: int, start: int = 0, limit: int = 50
     ) -> dict[str, Any]:
@@ -1543,6 +1575,73 @@ class Garmin:
             ],
         }
         logger.debug("Adding food %s to meal %d for %s", food_id, meal_id, cdate)
+
+        return self.garth.put("connectapi", url, json=payload).json()
+
+    def add_nutrition_custom_meal_log(
+        self,
+        cdate: str,
+        meal_id: int,
+        custom_meal: dict[str, Any],
+        meal_time: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a custom meal (all its foods) to the food log.
+
+        Args:
+            cdate: Date in 'YYYY-MM-DD' format
+            meal_id: Meal ID (from get_nutrition_meals, e.g., 205463 for dinner)
+            custom_meal: Custom meal dict from get_nutrition_custom_meals()
+            meal_time: Time in 'HH:MM:SS' format (defaults to current time)
+
+        Returns:
+            Updated food logs for the day
+
+        """
+        from datetime import datetime, timezone
+
+        cdate = _validate_date_format(cdate, "cdate")
+        if meal_time is None:
+            meal_time = datetime.now().strftime("%H:%M:%S")
+
+        custom_meal_id = custom_meal["customMealId"]
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+        food_log_items = []
+        for food in custom_meal.get("foods", []):
+            meta = food["foodMetaData"]
+            nc = (
+                food.get("selectedNutritionContent")
+                or food.get("nutritionContents", [{}])[0]
+            )
+
+            food_log_items.append(
+                {
+                    "logId": None,
+                    "logTimestamp": timestamp,
+                    "logSource": "GCW",
+                    "logCategory": "REGULAR_LOG",
+                    "mealTime": meal_time,
+                    "action": "ADD",
+                    "mealId": meal_id,
+                    "foodId": meta["foodId"],
+                    "servingId": nc.get("servingId"),
+                    "source": meta["source"],
+                    "regionCode": "US",
+                    "languageCode": "en",
+                    "servingQty": food.get("servingQty", 1),
+                    "customMealId": custom_meal_id,
+                }
+            )
+
+        url = self.garmin_connect_nutrition_food_logs_url
+        payload = {"mealDate": cdate, "foodLogItems": food_log_items}
+        logger.debug(
+            "Adding custom meal %d with %d foods to meal %d for %s",
+            custom_meal_id,
+            len(food_log_items),
+            meal_id,
+            cdate,
+        )
 
         return self.garth.put("connectapi", url, json=payload).json()
 
