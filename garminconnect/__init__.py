@@ -215,6 +215,10 @@ class Garmin:
             "/wellness-service/wellness/bodyBattery/events"
         )
 
+        self.garmin_connect_body_battery_messaging_url = (
+            "/wellness-service/wellness/bodyBattery/messagingToday"
+        )
+
         self.garmin_connect_blood_pressure_endpoint = (
             "/bloodpressure-service/bloodpressure/range"
         )
@@ -652,6 +656,34 @@ class Garmin:
 
         return response
 
+    def get_daily_movement(self, date: str) -> dict[str, Any]:
+        """Return daily movement data for a specific date.
+
+        Provides step and movement timeline data, including hourly step
+        counts and movement intensity throughout the day.
+
+        Args:
+            date: Date in 'YYYY-MM-DD' format.
+
+        Returns:
+            Dictionary containing daily movement data:
+            - calendarDate: The requested date
+            - startTimestampGMT/endTimestampGMT: Day boundaries
+            - movementValues: List of timestamped movement entries
+            - dailyStepGoal: User's step goal for the day
+            - totalSteps: Total steps recorded
+
+        Example:
+            >>> movement = api.get_daily_movement('2023-07-01')
+            >>> print(f"Total steps: {movement.get('totalSteps')}")
+
+        """
+        date = _validate_date_format(date, "date")
+        url = f"/wellness-service/wellness/dailyMovement?calendarDate={date}"
+        logger.debug("Requesting daily movement data for %s", date)
+
+        return self.connectapi(url)
+
     def get_daily_steps(self, start: str, end: str) -> list[dict[str, Any]]:
         """Fetch available steps data 'start' and 'end' format 'YYYY-MM-DD'.
 
@@ -808,6 +840,32 @@ class Garmin:
             raise GarminConnectConnectionError("No heart rate data received")
 
         return response
+
+    def get_heart_rate_zones(self) -> list[dict[str, Any]]:
+        """Return heart rate zone configuration for the current user.
+
+        Returns heart rate zone thresholds configured for the user,
+        including zones 1-5 with floor values for each sport type.
+
+        Returns:
+            List of heart rate zone configurations, one per sport type.
+            Each contains:
+            - trainingMethod: HR calculation method (HR_MAX, LTHR, etc.)
+            - zone1Floor through zone5Floor: Zone boundaries in bpm
+            - maxHeartRateUsed: Maximum HR used for calculations
+            - restingHeartRateUsed: Resting HR value
+            - sport: Sport type (DEFAULT, RUNNING, CYCLING, etc.)
+
+        Example:
+            >>> zones = api.get_heart_rate_zones()
+            >>> default_zones = next(z for z in zones if z['sport'] == 'DEFAULT')
+            >>> print(f"Zone 2: {default_zones['zone2Floor']} bpm")
+
+        """
+        url = "/biometric-service/heartRateZones/"
+        logger.debug("Requesting heart rate zones")
+
+        return self.connectapi(url)
 
     def get_stats_and_body(self, cdate: str) -> dict[str, Any]:
         """Return activity data and body composition (compat for garminconnect)."""
@@ -1036,6 +1094,20 @@ class Garmin:
         cdate = _validate_date_format(cdate, "cdate")
         url = f"{self.garmin_connect_body_battery_events_url}/{cdate}"
         logger.debug("Requesting body battery event data")
+
+        return self.connectapi(url)
+
+    def get_body_battery_messaging_today(self) -> dict[str, Any]:
+        """Return body battery messaging data for today.
+
+        Returns contextual messaging about body battery changes, including:
+        - deltaValue: Change in body battery compared to yesterday
+        - timeOfDay: Context for when the message applies
+        - confirmedTotalSleepSeconds: Sleep duration affecting battery
+        - bodyBatteryVersion: Algorithm version used
+        """
+        url = self.garmin_connect_body_battery_messaging_url
+        logger.debug("Requesting body battery messaging data")
 
         return self.connectapi(url)
 
@@ -2256,6 +2328,99 @@ class Garmin:
 
         return self.connectapi(url, params=params)
 
+    def get_sleep_stats(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Return aggregated sleep statistics for a date range.
+
+        Provides daily sleep statistics over a date range, useful for
+        analyzing sleep patterns and trends over time.
+
+        Args:
+            start_date: Start date in 'YYYY-MM-DD' format.
+            end_date: End date in 'YYYY-MM-DD' format.
+
+        Returns:
+            List of daily sleep statistics, each containing:
+            - calendarDate: The date for this entry
+            - sleepTimeSeconds: Total sleep duration
+            - napTimeSeconds: Total nap duration
+            - deepSleepSeconds: Time in deep sleep
+            - lightSleepSeconds: Time in light sleep
+            - remSleepSeconds: Time in REM sleep
+            - awakeSleepSeconds: Time awake during sleep
+            - averageSpO2Value: Average blood oxygen level
+            - averageRespirationValue: Average respiration rate
+
+        Raises:
+            ValueError: If start_date is after end_date.
+
+        Example:
+            >>> stats = api.get_sleep_stats('2023-07-01', '2023-07-07')
+            >>> for day in stats:
+            ...     print(f"{day['calendarDate']}: {day['sleepTimeSeconds']/3600:.1f}h")
+
+        """
+        start_date = _validate_date_format(start_date, "start_date")
+        end_date = _validate_date_format(end_date, "end_date")
+
+        # Validate date range
+        start = datetime.strptime(start_date, DATE_FORMAT_STR).date()
+        end = datetime.strptime(end_date, DATE_FORMAT_STR).date()
+        if start > end:
+            raise ValueError("start_date cannot be after end_date")
+
+        url = f"/sleep-service/stats/sleep/daily/{start_date}/{end_date}"
+        logger.debug("Requesting sleep stats from %s to %s", start_date, end_date)
+
+        return self.connectapi(url)
+
+    def get_calendar_month(self, year: int, month: int) -> dict[str, Any]:
+        """Return calendar data for a specific month.
+
+        Provides activity and event data for a calendar month view,
+        including activities, goals, and other calendar items.
+
+        Args:
+            year: Year (1900-9999).
+            month: Month (1-12, user-friendly). Automatically converted
+                to 0-indexed for the Garmin API.
+
+        Returns:
+            Dictionary containing calendar data:
+            - calendarItems: List of activities, events, and goals
+            - startDayOfMonth: First day of the month
+            - numOfDaysInMonth: Number of days in the month
+            - Each calendar item includes type, date, and item-specific data
+
+        Raises:
+            TypeError: If year or month are not integers.
+            ValueError: If year or month are out of valid range.
+
+        Example:
+            >>> calendar = api.get_calendar_month(2023, 7)
+            >>> activities = [i for i in calendar.get('calendarItems', [])
+            ...               if i.get('itemType') == 'activity']
+            >>> print(f"Found {len(activities)} activities in July 2023")
+
+        """
+        # Type validation (bool is subclass of int in Python)
+        if not isinstance(year, int) or isinstance(year, bool):
+            raise TypeError("year must be an integer")
+        if not isinstance(month, int) or isinstance(month, bool):
+            raise TypeError("month must be an integer")
+
+        # Range validation
+        if not 1900 <= year <= 9999:
+            raise ValueError("year must be between 1900 and 9999")
+        if not 1 <= month <= 12:
+            raise ValueError("month must be between 1 and 12")
+
+        # Convert to 0-indexed month for API
+        api_month = month - 1
+        url = f"/calendar-service/year/{year}/month/{api_month}"
+        logger.debug("Requesting calendar data for %d-%02d", year, month)
+
+        return self.connectapi(url)
+
     def set_sleep_note(self, cdate: str, note: str) -> dict[str, Any]:
         """Set sleep note for a given date.
 
@@ -2308,6 +2473,50 @@ class Garmin:
         cdate = _validate_date_format(cdate, "cdate")
         url = f"{self.garmin_connect_hrv_url}/{cdate}"
         logger.debug("Requesting Heart Rate Variability (hrv) data")
+
+        return self.connectapi(url)
+
+    def get_hrv_summary(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Return HRV summary data for a date range.
+
+        Provides daily HRV statistics over a date range, useful for
+        tracking HRV trends and recovery patterns.
+
+        Args:
+            start_date: Start date in 'YYYY-MM-DD' format.
+            end_date: End date in 'YYYY-MM-DD' format.
+
+        Returns:
+            List of daily HRV summaries, each containing:
+            - calendarDate: The date for this entry
+            - weeklyAvg: 7-day rolling average HRV
+            - lastNight: Previous night's HRV value
+            - lastNightAvg: Previous night's average HRV
+            - lastNight5MinHigh: Highest 5-min HRV reading
+            - baseline: User's baseline HRV values
+            - status: HRV status indicator (BALANCED, LOW, etc.)
+            - feedbackPhrase: Human-readable status message
+
+        Raises:
+            ValueError: If start_date is after end_date.
+
+        Example:
+            >>> hrv = api.get_hrv_summary('2023-07-01', '2023-07-07')
+            >>> for day in hrv:
+            ...     print(f"{day['calendarDate']}: {day.get('weeklyAvg')}")
+
+        """
+        start_date = _validate_date_format(start_date, "start_date")
+        end_date = _validate_date_format(end_date, "end_date")
+
+        # Validate date range
+        start = datetime.strptime(start_date, DATE_FORMAT_STR).date()
+        end = datetime.strptime(end_date, DATE_FORMAT_STR).date()
+        if start > end:
+            raise ValueError("start_date cannot be after end_date")
+
+        url = f"/hrv-service/hrv/daily/{start_date}/{end_date}"
+        logger.debug("Requesting HRV summary from %s to %s", start_date, end_date)
 
         return self.connectapi(url)
 
@@ -2447,6 +2656,35 @@ class Garmin:
         cdate = _validate_date_format(cdate, "cdate")
         url = f"{self.garmin_connect_training_status_url}/{cdate}"
         logger.debug("Requesting training status data")
+
+        return self.connectapi(url)
+
+    def get_training_status_daily(self, date: str) -> dict[str, Any]:
+        """Return daily training status snapshot for a specific date.
+
+        Provides a daily snapshot of training metrics including training
+        load, recovery time, VO2 max, and training status indicators.
+
+        Args:
+            date: Date in 'YYYY-MM-DD' format.
+
+        Returns:
+            Dictionary containing daily training metrics:
+            - trainingStatus: Current training status (e.g., PRODUCTIVE, RECOVERY)
+            - trainingLoad: Acute training load value
+            - vo2MaxPrecise: VO2 max estimate
+            - recoveryTime: Recovery time in hours
+            - heatAcclimationPercentage: Heat acclimation level
+            - altitudeAcclimationPercentage: Altitude acclimation level
+
+        Example:
+            >>> status = api.get_training_status_daily('2023-07-01')
+            >>> print(f"Training status: {status.get('trainingStatus')}")
+
+        """
+        date = _validate_date_format(date, "date")
+        url = f"/metrics-service/metrics/trainingstatus/daily/{date}"
+        logger.debug("Requesting daily training status for %s", date)
 
         return self.connectapi(url)
 
@@ -2676,6 +2914,29 @@ class Garmin:
                 return activity_list[-1]
 
         return None
+
+    def get_activities_first_last(self) -> dict[str, Any]:
+        """Return the dates of the user's first and last recorded activities.
+
+        Provides a quick way to determine the date range of all activities
+        in the user's Garmin Connect account without fetching the full
+        activity list.
+
+        Returns:
+            Dictionary containing first and last activity timestamps:
+            - firstActivityDate: ISO timestamp of first recorded activity
+            - lastActivityDate: ISO timestamp of most recent activity
+
+        Example:
+            >>> dates = api.get_activities_first_last()
+            >>> print(f"First activity: {dates['firstActivityDate']}")
+            >>> print(f"Last activity: {dates['lastActivityDate']}")
+
+        """
+        url = "/activitylist-service/activities/first-last"
+        logger.debug("Requesting first and last activity dates")
+
+        return self.connectapi(url)
 
     def upload_activity(self, activity_path: str) -> Any:
         """Upload activity in fit format from file."""

@@ -190,3 +190,69 @@ def test_request_reload(garmin: garminconnect.Garmin) -> None:
     # Get steps data after reload - should still be accessible
     final_steps = sum(steps["steps"] for steps in garmin.get_steps_data(cdate))
     assert final_steps >= 0  # Steps data should be non-negative
+
+
+@pytest.mark.vcr
+def test_heart_rate_zones(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    zones = garmin.get_heart_rate_zones()
+    assert zones is not None
+    assert isinstance(zones, list)
+    if zones:
+        # Check that each zone has expected fields
+        for zone in zones:
+            assert "sport" in zone
+            assert "trainingMethod" in zone
+
+
+@pytest.mark.vcr
+def test_activities_first_last(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    dates = garmin.get_activities_first_last()
+    assert dates is not None
+    assert isinstance(dates, dict)
+    # Should contain first and last activity dates
+    assert "firstActivityDate" in dates or "lastActivityDate" in dates
+
+
+@pytest.mark.vcr
+def test_daily_movement(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    movement = garmin.get_daily_movement(DATE)
+    assert movement is not None
+    assert isinstance(movement, dict)
+    assert "calendarDate" in movement
+
+
+@pytest.mark.vcr
+def test_training_status_daily(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    status = garmin.get_training_status_daily(DATE)
+    # May return None if no training data for the date
+    if status is None:
+        pytest.skip("No training status data for date")
+    assert isinstance(status, dict)
+
+
+@pytest.mark.vcr
+def test_hrv_summary(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    hrv = garmin.get_hrv_summary(DATE, DATE)
+    assert hrv is not None
+    assert isinstance(hrv, list)
+
+
+@pytest.mark.vcr
+def test_sleep_stats(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    stats = garmin.get_sleep_stats(DATE, DATE)
+    assert stats is not None
+    assert isinstance(stats, list)
+
+
+@pytest.mark.vcr
+def test_calendar_month(garmin: garminconnect.Garmin) -> None:
+    garmin.login()
+    calendar = garmin.get_calendar_month(2023, 7)
+    assert calendar is not None
+    assert isinstance(calendar, dict)
