@@ -394,9 +394,7 @@ def delete_custom_meal(ctx: click.Context, meal_id: int) -> None:
 @click.argument("food_id")
 @click.argument("serving_id")
 @click.argument("quantity", type=float)
-@click.option(
-    "--source", default="FATSECRET", help="Food source (default: FATSECRET)"
-)
+@click.option("--source", default="FATSECRET", help="Food source (default: FATSECRET)")
 @click.option("--meal-time", help="Time in HH:MM:SS format (default: current time)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
@@ -454,5 +452,60 @@ def delete_logs(ctx: click.Context, date_input: str, log_ids: str) -> None:
         ids = [log_id.strip() for log_id in log_ids.split(",")]
         client.delete_nutrition_food_logs(target_date, ids)
         click.echo(f"Deleted {len(ids)} nutrition log(s) for {target_date}")
+    except Exception as e:
+        handle_api_error(e)
+
+
+@nutrition.command()
+@click.argument("date_input")
+@click.argument("meal_id", type=int)
+@click.argument("custom_meal_id", type=int)
+@click.option("--meal-time", help="Time in HH:MM:SS format (default: current time)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+@require_auth
+def add_meal_log(
+    ctx: click.Context,
+    date_input: str,
+    meal_id: int,
+    custom_meal_id: int,
+    meal_time: str | None,
+    as_json: bool,
+) -> None:
+    """Log a custom meal (all its foods) for a date.
+
+    DATE: Date to log meal (today, yesterday, -N, YYYY-MM-DD)
+    MEAL_ID: Meal slot ID (from 'nutrition meals', e.g., breakfast/lunch/dinner)
+    CUSTOM_MEAL_ID: ID of custom meal (from 'nutrition custom-meals')
+
+    Example workflow:
+      1. garmin nutrition custom-meals --json  # Get custom meal IDs
+      2. garmin nutrition meals today --json   # Get meal slot IDs
+      3. garmin nutrition add-meal-log today <meal_id> <custom_meal_id>
+    """
+    client = ctx.obj["client"]
+    try:
+        target_date = parse_date(date_input)
+
+        # Fetch custom meals to get the full meal dict
+        meals_response = client.get_nutrition_custom_meals()
+        custom_meals = meals_response.get("customMeals", [])
+        custom_meal = next(
+            (m for m in custom_meals if m["customMealId"] == custom_meal_id),
+            None,
+        )
+        if not custom_meal:
+            raise click.ClickException(
+                f"Custom meal {custom_meal_id} not found. "
+                "Use 'nutrition custom-meals --json' to list available meals."
+            )
+
+        data = client.add_nutrition_custom_meal_log(
+            cdate=target_date,
+            meal_id=meal_id,
+            custom_meal=custom_meal,
+            meal_time=meal_time,
+        )
+        click.echo(format_output(data, as_json=as_json))
     except Exception as e:
         handle_api_error(e)
