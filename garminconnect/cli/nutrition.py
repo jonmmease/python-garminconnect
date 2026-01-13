@@ -178,7 +178,10 @@ def custom_foods(ctx: click.Context, limit: int | None, as_json: bool) -> None:
     """Get user's custom nutrition foods."""
     client = ctx.obj["client"]
     try:
-        data = client.get_nutrition_custom_foods(limit=limit)
+        kwargs: dict[str, int] = {}
+        if limit is not None:
+            kwargs["limit"] = limit
+        data = client.get_nutrition_custom_foods(**kwargs)
         click.echo(format_output(data, as_json=as_json))
     except Exception as e:
         handle_api_error(e)
@@ -326,7 +329,10 @@ def custom_meals(ctx: click.Context, limit: int | None, as_json: bool) -> None:
     """Get user's custom nutrition meals."""
     client = ctx.obj["client"]
     try:
-        data = client.get_nutrition_custom_meals(limit=limit)
+        kwargs: dict[str, int] = {}
+        if limit is not None:
+            kwargs["limit"] = limit
+        data = client.get_nutrition_custom_meals(**kwargs)
         click.echo(format_output(data, as_json=as_json))
     except Exception as e:
         handle_api_error(e)
