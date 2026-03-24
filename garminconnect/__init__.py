@@ -44,6 +44,17 @@ VALID_SERVING_UNITS = {
 }
 
 
+def _nutrition_str(value: float) -> str:
+    """Convert a nutrition value to string for the Garmin API.
+
+    The API expects integer strings (e.g., "0", "10") not float strings
+    (e.g., "0.0", "10.0"). Convert whole-number floats to int first.
+    """
+    if isinstance(value, float) and value == int(value):
+        return str(int(value))
+    return str(value)
+
+
 # Add validation utilities
 def _validate_date_format(date_str: str, param_name: str = "date") -> str:
     """Validate date string format YYYY-MM-DD."""
@@ -1693,13 +1704,13 @@ class Garmin:
         nutrition: dict[str, Any] = {
             "servingId": None,
             "servingUnit": api_unit,
-            "numberOfUnits": str(serving_size),
-            "calories": str(calories),
-            "carbs": str(carbs),
-            "protein": str(protein),
-            "fat": str(fat),
-            "fiber": str(fiber),
-            "sugar": str(sugar),
+            "numberOfUnits": _nutrition_str(serving_size),
+            "calories": _nutrition_str(calories),
+            "carbs": _nutrition_str(carbs),
+            "protein": _nutrition_str(protein),
+            "fat": _nutrition_str(fat),
+            "fiber": _nutrition_str(fiber),
+            "sugar": _nutrition_str(sugar),
         }
 
         # Add optional nutrition fields if provided
@@ -1720,7 +1731,7 @@ class Garmin:
         }
         for key, value in optional_fields.items():
             if value is not None:
-                nutrition[key] = str(value)
+                nutrition[key] = _nutrition_str(value)
 
         food_meta: dict[str, Any] = {
             "foodId": None,
@@ -1846,13 +1857,13 @@ class Garmin:
         nutrition: dict[str, Any] = {
             "servingId": serving_id,
             "servingUnit": api_unit,
-            "numberOfUnits": str(serving_size),
-            "calories": str(calories),
-            "carbs": str(carbs),
-            "protein": str(protein),
-            "fat": str(fat),
-            "fiber": str(fiber),
-            "sugar": str(sugar),
+            "numberOfUnits": _nutrition_str(serving_size),
+            "calories": _nutrition_str(calories),
+            "carbs": _nutrition_str(carbs),
+            "protein": _nutrition_str(protein),
+            "fat": _nutrition_str(fat),
+            "fiber": _nutrition_str(fiber),
+            "sugar": _nutrition_str(sugar),
         }
 
         # Add optional nutrition fields if provided
@@ -1873,7 +1884,7 @@ class Garmin:
         }
         for key, value in optional_fields.items():
             if value is not None:
-                nutrition[key] = str(value)
+                nutrition[key] = _nutrition_str(value)
 
         food_meta: dict[str, Any] = {
             "foodId": food_id,

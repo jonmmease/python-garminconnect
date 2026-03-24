@@ -66,12 +66,56 @@ async def garmin_api_call(func: object, *args: object, **kwargs: object) -> Any:
     1. Rate limiting (1s minimum interval)
     2. asyncio.to_thread() for non-blocking execution
     3. Retry on 429/connection errors (via tenacity)
+    4. Response body extraction on HTTP errors
 
     """
     rate_limiter = get_rate_limiter()
 
     async with rate_limiter:
-        return await asyncio.to_thread(_call_with_retry, func, *args, **kwargs)
+        try:
+            return await asyncio.to_thread(
+                _call_with_retry, func, *args, **kwargs
+            )
+        except Exception as exc:
+            # Extract response body from HTTP errors for better diagnostics
+            detail = _extract_error_detail(exc)
+            if detail:
+                raise RuntimeError(detail) from exc
+            raise
+
+
+def _extract_error_detail(exc: Exception) -> str | None:
+    """Try to extract the HTTP response body from an exception chain.
+
+    Garth wraps HTTPError in GarthHTTPError, and the response body
+    (which often contains the actual validation error from Garmin)
+    is otherwise lost.
+    """
+    # Walk the exception chain looking for an HTTP response
+    current: BaseException | None = exc
+    while current is not None:
+        # Check for requests.Response on the exception
+        response = getattr(current, "response", None)
+        if response is not None and hasattr(response, "text"):
+            try:
+                body = response.text
+                status = getattr(response, "status_code", "?")
+                return f"HTTP {status}: {body}"
+            except Exception:  # noqa: S110
+                pass
+        # GarthHTTPError stores the wrapped error in .error
+        inner = getattr(current, "error", None)
+        if inner is not None and inner is not current:
+            response = getattr(inner, "response", None)
+            if response is not None and hasattr(response, "text"):
+                try:
+                    body = response.text
+                    status = getattr(response, "status_code", "?")
+                    return f"HTTP {status}: {body}"
+                except Exception:  # noqa: S110
+                    pass
+        current = current.__cause__
+    return None
 
 
 def _call_with_retry(func: object, *args: object, **kwargs: object) -> Any:

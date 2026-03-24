@@ -10,11 +10,18 @@ logger = logging.getLogger(__name__)
 async def request_upload(
     filename: str | None = None, max_bytes: int = 50 * 1024 * 1024
 ) -> dict:
-    """Request an upload URL for uploading a file to Garmin Connect.
+    """Request an upload URL for uploading a file.
 
-    Returns an upload URL, token, expiration, and a curl command example.
-    The token can be used later with tools that accept an image_token
-    (e.g., manage_nutrition create_food/update_food).
+    Call this first, then upload the file using the returned curl command.
+    The curl response will contain a `fileToken` — pass THAT token
+    (not the `token` from this response) to tools that accept image_token
+    (e.g., manage_nutrition create_food/update_food) or file_token
+    (e.g., manage_activity upload).
+
+    Workflow:
+    1. Call request_upload() → get upload_url, token, curl
+    2. Run the curl command to upload the file → response contains fileToken
+    3. Pass the fileToken to manage_nutrition(image_token=fileToken)
 
     Args:
         filename: Optional filename hint (e.g., "food_photo.jpg").
