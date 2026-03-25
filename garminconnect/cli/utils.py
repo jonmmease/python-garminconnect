@@ -15,6 +15,7 @@ from garminconnect import (
     GarminConnectConnectionError,
     GarminConnectTooManyRequestsError,
 )
+from garminconnect.cli.resilience import global_rate_limit
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -75,7 +76,11 @@ def parse_date(value: str) -> str:
 
 
 def require_auth(f: F) -> F:
-    """Decorator to ensure authentication before command execution."""
+    """Decorator to ensure authentication before command execution.
+
+    Also applies global rate limiting to prevent API rate limit errors
+    when multiple CLI commands run in parallel.
+    """
 
     @wraps(f)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -86,17 +91,19 @@ def require_auth(f: F) -> F:
                 "Not authenticated. Please run: garmin auth login"
             )
 
-        try:
-            client = Garmin()
-            client.login(tokenstore=str(get_token_dir()))
-            ctx.obj["client"] = client
-        except GarminConnectAuthenticationError as e:
-            raise click.ClickException(
-                f"Authentication failed: {e}\n"
-                f"Please re-authenticate: garmin auth login"
-            ) from None
+        # Apply global rate limit before API access
+        with global_rate_limit(get_token_dir()):
+            try:
+                client = Garmin()
+                client.login(tokenstore=str(get_token_dir()))
+                ctx.obj["client"] = client
+            except GarminConnectAuthenticationError as e:
+                raise click.ClickException(
+                    f"Authentication failed: {e}\n"
+                    f"Please re-authenticate: garmin auth login"
+                ) from None
 
-        return f(*args, **kwargs)
+            return f(*args, **kwargs)
 
     return wrapper  # type: ignore[return-value]
 
