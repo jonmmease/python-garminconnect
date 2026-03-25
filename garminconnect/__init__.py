@@ -506,7 +506,7 @@ class Garmin:
             if not getattr(self.garth, "profile", None):
                 try:
                     prof = self.garth.connectapi(
-                        "/userprofile-service/userprofile/profile"
+                        "/userprofile-service/socialProfile"
                     )
                 except Exception as e:
                     raise GarminConnectAuthenticationError(

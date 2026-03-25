@@ -165,6 +165,9 @@ async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
     # Initialize rate limiter
     _rate_limiter = AsyncRateLimiter(min_interval=1.0)
 
+    # Disable garth telemetry
+    os.environ.setdefault("GARTH_TELEMETRY_ENABLED", "false")
+
     # Initialize Garmin client
     try:
         _garmin_client = Garmin()
